@@ -11,7 +11,7 @@ app.use(cors());
 const userRoutes = require("./routes/userRoute");
 app.use("/api/users", userRoutes);
 
-mongoose.connect(process.env.MongoDB_URI)
+mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log("MongoDB Connected"))
 .catch(err => console.log(err));
 
