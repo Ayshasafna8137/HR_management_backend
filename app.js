@@ -13,6 +13,8 @@ var userProfileRouter = require('./routes/userProfile');
 var attendanceRouter = require('./routes/attendance');
 var companyRouter = require('./routes/company')
 var holidayRouter = require("./routes/holidays");
+var departmentRouter = require("./routes/department");
+const departmentHeadRoutes = require("./routes/departmenthead");
 
 
 
@@ -59,6 +61,10 @@ app.use('/api/attendance',attendanceRouter);
 app.use('/api/company',companyRouter);
 //holiday
 app.use("/api/holidays", holidayRouter);
+//department
+app.use("/api/department", departmentRouter);
+//department head
+app.use("/api/department-heads",departmentHeadRoutes);
 
 
 

@@ -1,11 +1,22 @@
 const UserModel = require("../models/User");
 const asyncHandler = require("express-async-handler");
+const mongoose = require("mongoose");
 
 
 // GET EMPLOYEE PROFILE
 exports.getUserProfile = asyncHandler(async (req, res) => {
 
-  const user = await UserModel.findById(req.params.id)
+  const { id } = req.params;
+
+  // ID validation
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid employee ID"
+    });
+  }
+
+  const user = await UserModel.findById(id)
     .select("-password");
 
   if (!user) {
@@ -15,22 +26,20 @@ exports.getUserProfile = asyncHandler(async (req, res) => {
     });
   }
 
-
   const profileData = {
     _id: user._id,
-    name: `${user.firstName} ${user.lastName || ""}`.trim(),
-    designation: user.designation,
-    department: user.department,
-    email: user.email,
-    mobile: user.mobile,
-    address: user.address,
-    about: user.about || "",
-    education: user.education || "",
-    experience: user.experience || "",
+    name: `${user.firstName?.trim() || ""} ${user.lastName?.trim() || ""}`.trim(),
+    designation: user.designation?.trim(),
+    department: user.department?.trim(),
+    email: user.email?.trim(),
+    mobile: user.mobile?.trim(),
+    address: user.address?.trim(),
+    about: user.about?.trim() || "",
+    education: user.education?.trim() || "",
+    experience: user.experience?.trim() || "",
     skills: user.skills || [],
     image: user.image || ""
   };
-
 
   res.status(200).json({
     success: true,

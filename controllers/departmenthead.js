@@ -3,6 +3,7 @@ const Department = require("../models/Department");
 const asyncHandler = require("express-async-handler");
 
 
+
 /* CREATE DEPARTMENT HEAD */
 
 exports.createDepartmentHead = asyncHandler(async (req, res) => {
@@ -25,7 +26,7 @@ exports.createDepartmentHead = asyncHandler(async (req, res) => {
  email = email?.trim();
 
 
- // EMPTY VALIDATION (AFTER TRIM)
+ // EMPTY VALIDATION (after trim)
  if (!name || !departmentId || !designation || !phone || !email || !joiningDate) {
   return res.status(400).json({
    success: false,
@@ -152,14 +153,12 @@ exports.updateDepartmentHead = asyncHandler(async (req, res) => {
  let { name, designation, phone, email } = req.body;
 
 
- // TRIM VALUES
  if (name) name = name.trim();
  if (designation) designation = designation.trim();
  if (phone) phone = phone.trim();
  if (email) email = email.trim();
 
 
- // PHONE VALIDATION
  if (phone) {
   const phoneRegex = /^[0-9]{10}$/;
 
@@ -172,7 +171,6 @@ exports.updateDepartmentHead = asyncHandler(async (req, res) => {
  }
 
 
- // EMAIL VALIDATION
  if (email) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -187,13 +185,7 @@ exports.updateDepartmentHead = asyncHandler(async (req, res) => {
 
  const updated = await DepartmentHead.findByIdAndUpdate(
   req.params.id,
-  {
-   ...req.body,
-   name,
-   designation,
-   phone,
-   email
-  },
+  req.body,
   { new: true }
  );
 
