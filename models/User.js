@@ -56,7 +56,6 @@ const UserSchema = new mongoose.Schema(
       type: String
     }
   ],
-
   dateOfBirth: Date,
 
   joiningDate: Date,
