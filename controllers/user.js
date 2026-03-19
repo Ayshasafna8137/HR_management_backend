@@ -3,8 +3,7 @@ const asyncHandler = require("express-async-handler");
 const bcrypt = require("bcrypt");
 
 
-//get user
-
+// GET USERS
 exports.getUsers = asyncHandler(async (req, res) => {
 
   const users = await UserModel.find({ isActive: true })
@@ -35,10 +34,11 @@ exports.getUsers = asyncHandler(async (req, res) => {
 
 });
 
-//create user
+
+// CREATE USER
 exports.createUsers = asyncHandler(async (req, res) => {
- console.log("Skills from request:", req.body.skills);
-  const {
+
+  let {
     firstName,
     lastName,
     gender,
@@ -60,7 +60,21 @@ exports.createUsers = asyncHandler(async (req, res) => {
   } = req.body;
 
 
-  // Validation
+  // TRIM STRING VALUES
+  firstName = firstName?.trim();
+  lastName = lastName?.trim();
+  mobile = mobile?.trim();
+  email = email?.trim();
+  role = role?.trim();
+  department = department?.trim();
+  designation = designation?.trim();
+  address = address?.trim();
+  education = education?.trim();
+  workLocation = workLocation?.trim();
+  status = status?.trim();
+
+
+  // REQUIRED VALIDATION
   if (!firstName || !mobile || !email || !password) {
     return res.status(400).json({
       success: false,
@@ -69,7 +83,7 @@ exports.createUsers = asyncHandler(async (req, res) => {
   }
 
 
-  // Check email exists
+  // EMAIL EXISTS
   const emailExists = await UserModel.findOne({ email });
 
   if (emailExists) {
@@ -80,7 +94,7 @@ exports.createUsers = asyncHandler(async (req, res) => {
   }
 
 
-  // Check mobile exists
+  // MOBILE EXISTS
   const mobileExists = await UserModel.findOne({ mobile });
 
   if (mobileExists) {
@@ -91,32 +105,32 @@ exports.createUsers = asyncHandler(async (req, res) => {
   }
 
 
-  // Hash password
+  // HASH PASSWORD
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
 
-  // Create employee
+  // CREATE USER
   const user = new UserModel({
-  firstName,
-  lastName,
-  gender,
-  mobile,
-  email,
-  password: hashedPassword,
-  role,
-  department,
-  designation,
-  address,
-  dateOfBirth,
-  education,
-  salary,
-  joiningDate,
-  lastPromotionDate,
-  workLocation,
-  status,
-  skills: skills || []
-});
+    firstName,
+    lastName,
+    gender,
+    mobile,
+    email,
+    password: hashedPassword,
+    role,
+    department,
+    designation,
+    address,
+    dateOfBirth,
+    education,
+    salary,
+    joiningDate,
+    lastPromotionDate,
+    workLocation,
+    status,
+    skills: skills || []
+  });
 
   const savedUser = await user.save();
 
@@ -129,7 +143,8 @@ exports.createUsers = asyncHandler(async (req, res) => {
 
 });
 
-//update user
+
+// UPDATE USER
 exports.updateUsers = asyncHandler(async (req, res) => {
 
   const user = await UserModel.findById(req.params.id);
@@ -144,7 +159,29 @@ exports.updateUsers = asyncHandler(async (req, res) => {
   let updateData = { ...req.body };
 
 
-  // Convert name → firstName + lastName
+  // TRIM STRING FIELDS
+  const trimFields = [
+    "firstName",
+    "lastName",
+    "mobile",
+    "email",
+    "role",
+    "department",
+    "designation",
+    "address",
+    "education",
+    "workLocation",
+    "status"
+  ];
+
+  trimFields.forEach(field => {
+    if (updateData[field]) {
+      updateData[field] = updateData[field].trim();
+    }
+  });
+
+
+  // CONVERT NAME → FIRST + LAST
   if (req.body.name) {
     const parts = req.body.name.trim().split(" ");
     updateData.firstName = parts[0];
@@ -171,8 +208,8 @@ exports.updateUsers = asyncHandler(async (req, res) => {
 
 });
 
-//delete user
 
+// DELETE USER
 exports.deleteUsers = asyncHandler(async (req, res) => {
 
   const user = await UserModel.findById(req.params.id);
