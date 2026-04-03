@@ -2,60 +2,63 @@ const mongoose = require("mongoose");
 
 const companySchema = new mongoose.Schema(
   {
-
-      companyId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Company",
-        required: true
-      },
     
     
     name: {
       type: String,
-      required: true,
+      required: [true, "Company name is required"],
       trim: true
     },
 
     email: {
       type: String,
-      required: true,
+      required: [true, "Company email is required"],
       unique: true,
-      lowercase: true
+      lowercase: true,
+      trim: true
     },
 
     phone: {
-      type: String
+      type: String,
+      trim: true,
+      default: ""
     },
 
     website: {
-      type: String
+      type: String,
+      trim: true,
+      default: ""
     },
 
     logo: {
-      type: String
+      type: String,
+      default: ""
     },
 
     address: {
-      street: String,
-      city: String,
-      state: String,
-      country: String,
-      zipCode: String
+      street: { type: String, default: "" },
+      city: { type: String, default: "" },
+      state: { type: String, default: "" },
+      country: { type: String, default: "" },
+      zipCode: { type: String, default: "" }
     },
 
     industry: {
-      type: String
+      type: String,
+      default: ""
     },
     
+    // This is for multi-branch companies - parent company reference (optional)
     mainBranch: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Company"
+      ref: "Company",
+      default: null
     },
 
-  isDelete: {
-  type: Boolean,
-  default: false
-},
+    isDelete: {
+      type: Boolean,
+      default: false
+    },
 
     isActive: {
       type: Boolean,
@@ -64,5 +67,10 @@ const companySchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Remove the companyId field if it exists (safety check)
+if (companySchema.path('companyId')) {
+  companySchema.remove('companyId');
+}
 
 module.exports = mongoose.model("Company", companySchema);

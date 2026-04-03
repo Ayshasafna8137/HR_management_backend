@@ -2,15 +2,26 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  getCompany,
-  addCompany,
+  getCompanies,
+  createCompany,
   updateCompany,
-  deleteCompany
+  deleteCompany,
+  getCompanyById
 } = require("../controllers/company");
 
-router.get("/", getCompany);
-router.post("/", addCompany);
+// GET all companies
+router.get("/", getCompanies);
+
+// GET company by ID
+router.get("/:id", getCompanyById);
+
+// CREATE company
+router.post("/", createCompany);
+
+// UPDATE company
 router.put("/:id", updateCompany);
+
+// DELETE company
 router.delete("/:id", deleteCompany);
 
 module.exports = router;

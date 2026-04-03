@@ -1,64 +1,30 @@
-const AttendanceModel = require("../models/Attendance");
+const Attendance = require("../models/Attendance");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 
 
-// GET all attendance
-exports.getAttendance = asyncHandler(async (req, res) => {
+// CREATE ATTENDANCE
+exports.createAttendance = asyncHandler(async (req, res) => {
 
-  const data = await AttendanceModel
-    .find()
-    .populate("userId")
-    .populate("companyId")
-    .sort({ createdAt: -1 });
-
-  res.status(200).json(data);
-
-});
-
-
-// ADD attendance
-exports.addAttendance = asyncHandler(async (req, res) => {
-
-  const { userId, firstIn, lastOut, totalHours, status, shift } = req.body;
-
-  // userId validation
-  if (!userId) {
-    return res.status(400).json({ message: "UserId is required" });
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
-    return res.status(400).json({ message: "Invalid UserId" });
-  }
-
-  // firstIn validation
-  if (!firstIn) {
-    return res.status(400).json({ message: "First In time is required" });
-  }
-
-  // status validation
-  const validStatus = ["Present", "Absent", "Leave", "Half Day"];
-  if (status && !validStatus.includes(status)) {
-    return res.status(400).json({ message: "Invalid attendance status" });
-  }
-
-  // prevent duplicate attendance same day
-  const todayStart = new Date();
-  todayStart.setHours(0,0,0,0);
-
-  const todayEnd = new Date();
-  todayEnd.setHours(23,59,59,999);
-
-  const existing = await AttendanceModel.findOne({
+  const {
+    companyId,
     userId,
-    createdAt: { $gte: todayStart, $lte: todayEnd }
-  });
+    firstIn,
+    lastOut,
+    totalHours,
+    status,
+    shift
+  } = req.body;
 
-  if (existing) {
-    return res.status(400).json({ message: "Attendance already marked today" });
+  if (!companyId || !userId || !firstIn) {
+    return res.status(400).json({
+      success: false,
+      message: "companyId, userId and firstIn are required"
+    });
   }
 
-  const attendance = new AttendanceModel({
+  const attendance = await Attendance.create({
+    companyId,
     userId,
     firstIn,
     lastOut,
@@ -67,98 +33,151 @@ exports.addAttendance = asyncHandler(async (req, res) => {
     shift
   });
 
-  const saved = await attendance.save();
-
-  res.status(201).json(saved);
-
-});
-
-
-// GET single attendance
-exports.getSingleAttendance = asyncHandler(async (req, res) => {
-
-  const { id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid attendance ID" });
-  }
-
-  const attendance = await AttendanceModel
-    .findById(id)
-    .populate("userId");
-
-  if (!attendance) {
-    return res.status(404).json({ message: "Attendance not found" });
-  }
-
-  res.status(200).json(attendance);
+  res.status(201).json({
+    success: true,
+    message: "Attendance created successfully",
+    data: attendance
+  });
 
 });
 
 
-// UPDATE attendance
+
+// GET ALL ATTENDANCE
+exports.getAttendance = asyncHandler(async (req, res) => {
+
+  const { companyId } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({
+      success: false,
+      message: "companyId is required"
+    });
+  }
+
+  const attendance = await Attendance.find({ companyId })
+  .populate("userId", "firstName lastName email")
+  .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: attendance.length,
+    data: attendance
+  });
+
+});
+
+
+
+
+
+// GET TODAY ATTENDANCE
+exports.getTodayAttendance = asyncHandler(async (req, res) => {
+
+  const { companyId } = req.params;
+  const { date } = req.query;   // optional date
+
+  if (!companyId) {
+    return res.status(400).json({
+      success: false,
+      message: "companyId is required"
+    });
+  }
+
+  // Use provided date or today's date
+  const targetDate = date ? new Date(date) : new Date();
+
+  const start = new Date(targetDate);
+  start.setHours(0,0,0,0);
+
+  const end = new Date(targetDate);
+  end.setHours(23,59,59,999);
+
+  const attendance = await Attendance.find({
+    companyId,
+    date: { $gte: start, $lte: end }
+  })
+  .populate("userId","firstName lastName email")
+  .sort({createdAt:-1});
+
+  res.status(200).json({
+    success:true,
+    count:attendance.length,
+    data:attendance
+  });
+
+});
+
+// UPDATE ATTENDANCE
 exports.updateAttendance = asyncHandler(async (req, res) => {
 
   const { id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid attendance ID" });
+    return res.status(400).json({
+      success: false,
+      message: "Invalid attendance ID"
+    });
   }
 
-  const attendance = await AttendanceModel.findById(id);
+  const attendance = await Attendance.findById(id);
 
   if (!attendance) {
-    return res.status(404).json({ message: "Attendance not found" });
+    return res.status(404).json({
+      success: false,
+      message: "Attendance not found"
+    });
   }
 
-  const { todayActivity } = req.body;
+  const {
+    firstIn,
+    lastOut,
+    totalHours,
+    status,
+    shift
+  } = req.body;
 
-  // punch activity validation
-  if (todayActivity) {
+  attendance.firstIn = firstIn || attendance.firstIn;
+  attendance.lastOut = lastOut || attendance.lastOut;
+  attendance.totalHours = totalHours || attendance.totalHours;
+  attendance.status = status || attendance.status;
+  attendance.shift = shift || attendance.shift;
 
-    if (!todayActivity.time || !todayActivity.punch) {
-      return res.status(400).json({ 
-        message: "Activity must include time and punch type" 
-      });
-    }
+  await attendance.save();
 
-    attendance.punch = !attendance.punch;
-
-    attendance.todayActivity.push(todayActivity);
-
-    await attendance.save();
-
-    return res.status(200).json(attendance);
-  }
-
-  const updated = await AttendanceModel.findByIdAndUpdate(
-    id,
-    req.body,
-    { new: true, runValidators: true }
-  );
-
-  res.status(200).json(updated);
+  res.status(200).json({
+    success: true,
+    message: "Attendance updated successfully",
+    data: attendance
+  });
 
 });
 
 
-// DELETE attendance
+// DELETE ATTENDANCE
 exports.deleteAttendance = asyncHandler(async (req, res) => {
 
   const { id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid attendance ID" });
+    return res.status(400).json({
+      success: false,
+      message: "Invalid ID"
+    });
   }
 
-  const deleted = await AttendanceModel.findByIdAndDelete(id);
+  const attendance = await Attendance.findByIdAndDelete(id);
 
-  if (!deleted) {
-    return res.status(404).json({ message: "Attendance not found" });
+  if (!attendance) {
+    return res.status(404).json({
+      success: false,
+      message: "Attendance not found"
+    });
   }
 
-  res.status(200).json({
-    message: "Attendance deleted successfully"
+  res.json({
+    success: true,
+    message: "Attendance deleted"
   });
 
 });

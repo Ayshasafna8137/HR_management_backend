@@ -1,110 +1,182 @@
 const asyncHandler = require("express-async-handler");
+const mongoose = require("mongoose");
 const LeaveRequest = require("../models/leaveRequest");
-const LeaveBalance = require("../models/leaveBalance");
-const CompanyPolicy = require("../models/companyDetails");
+
+// GET ALL LEAVE REQUESTS
+exports.getAllLeaveRequests = asyncHandler(async (req, res) => {
+  const leaveRequests = await LeaveRequest.find()
+    .populate({
+      path: "userId",
+      select: "firstName lastName employeeId department"
+    })
+    .populate({
+      path: "manageId", 
+      select: "firstName lastName firstname lastname employeeId role email"
+    })
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    data: leaveRequests
+  });
+});
+
+// GET SINGLE LEAVE REQUEST
+exports.getLeaveRequestById = asyncHandler(async (req, res) => {
+  const leaveRequest = await LeaveRequest.findById(req.params.id)
+    .populate({
+      path: "userId",
+      select: "firstName lastName employeeId department email"
+    })
+    .populate({
+      path: "manageId",
+      select: "firstName lastName"
+    });
+
+  if (!leaveRequest) {
+    res.status(404);
+    throw new Error("Leave request not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    data: leaveRequest
+  });
+});
 
 // CREATE LEAVE REQUEST
 exports.createLeaveRequest = asyncHandler(async (req, res) => {
+  const {
+    userId,
+    companyId,
+    leaveType,
+    leaveFrom,
+    leaveTo,
+    noOfDays,
+    reason
+  } = req.body;
 
-    const { userId, companyId,  leaveType, leaveFrom, leaveTo, noOfDays, reason } = req.body;
+  if (!userId || !companyId || !leaveType || !leaveFrom || !leaveTo || !noOfDays || !reason) {
+    res.status(400);
+    throw new Error("All required fields must be provided");
+  }
 
-    if (!userId || !companyId || !leaveType || !leaveFrom || !leaveTo || !noOfDays) {
-        res.status(400);
-        throw new Error("All required fields must be provided");
-    }
+  const leave = await LeaveRequest.create({
+    userId,
+    companyId,
+    leaveType,
+    leaveFrom,
+    leaveTo,
+    noOfDays,
+    reason,
+    status: "Pending"
+  });
 
-    const leave = await LeaveRequest.create(req.body);
-
-    res.status(201).json({
-        success: true,
-        message: "Leave request created",
-        data: leave
+  const populatedLeave = await LeaveRequest.findById(leave._id)
+    .populate({
+      path: "userId",
+      select: "firstName lastName employeeId department email"
     });
+
+  res.status(201).json({
+    success: true,
+    message: "Leave request created successfully",
+    data: populatedLeave
+  });
 });
 
-
-// UPDATE LEAVE REQUEST (AUTO BALANCE)
+// UPDATE LEAVE REQUEST
 exports.updateLeaveRequest = asyncHandler(async (req, res) => {
-    
+  const leave = await LeaveRequest.findById(req.params.id);
 
-    const leave = await LeaveRequest.findById(req.params.id);
-    
+  if (!leave) {
+    res.status(404);
+    throw new Error("Leave request not found");
+  }
 
+  const { leaveType, leaveFrom, leaveTo, noOfDays, reason } = req.body;
+
+  if (leaveType) leave.leaveType = leaveType;
+  if (leaveFrom) leave.leaveFrom = leaveFrom;
+  if (leaveTo) leave.leaveTo = leaveTo;
+  if (noOfDays) leave.noOfDays = noOfDays;
+  if (reason) leave.reason = reason;
+
+  await leave.save();
+
+  const populatedLeave = await LeaveRequest.findById(leave._id)
+    .populate({
+      path: "userId",
+      select: "firstName lastName employeeId department email"
+    });
+
+  res.status(200).json({
+    success: true,
+    message: "Leave request updated successfully",
+    data: populatedLeave
+  });
+});
+
+// UPDATE LEAVE REQUEST STATUS (APPROVE/REJECT) - NO MANUAL BALANCE UPDATE NEEDED
+exports.updateLeaveStatus = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { status, manageId, manageRole } = req.body;
+
+    const leave = await LeaveRequest.findById(id);
+    
     if (!leave) {
         res.status(404);
         throw new Error("Leave request not found");
     }
 
-    leave.status = req.body.status;
-    leave.manageId = req.body.manageId;
-    leave.manageRole = req.body.manageRole;
+    if (leave.status !== "Pending") {
+        res.status(400);
+        throw new Error(`Leave request is already ${leave.status}`);
+    }
 
-   await leave.save();
+    leave.status = status;
+    leave.manageId = manageId;
+    leave.manageRole = manageRole;
+    leave.approvedDate = new Date();
     
+    await leave.save();
 
-    const year = new Date(leave.leaveFrom).getFullYear();
-
-    let balance = await LeaveBalance.findOne({
-        userId: leave.userId,
-        year: year
-    });
-
-    // CREATE IF NOT EXISTS
-    if (!balance) {
-
-        const companyPolicy = await CompanyPolicy.findOne({
-            companyId: leave.companyId
+    // Populate before returning
+    const updatedLeave = await LeaveRequest.findById(id)
+        .populate({
+            path: "userId",
+            select: "firstName lastName firstname lastname employeeId department email"
+        })
+        .populate({
+            path: "manageId",
+            select: "firstName lastName firstname lastname employeeId role email"
         });
-
-        if (!companyPolicy) {
-            res.status(404);
-            throw new Error("Company policy not found");
-        }
-
-        balance = new LeaveBalance({
-            userId: leave.userId,
-            companyId: leave.companyId,
-            year: year,
-            previousBalance: 0,
-            currentBalance: companyPolicy.annualLeave,
-            totalBalance: companyPolicy.annualLeave,
-            usedLeave: 0,
-            acceptedLeave: 0,
-            rejectedLeave: 0,
-            expiredLeave: 0,
-            carryOverBalance: 0
-        });
-    }
-    
-    // APPROVED
-    if (req.body.status === "Approved") {
-    if (balance.currentBalance < leave.noOfDays) {
-            res.status(400);
-            throw new Error("Insufficient balance");
-        }
-
-        balance.currentBalance -= leave.noOfDays;
-        balance.totalBalance -= leave.noOfDays;
-        balance.usedLeave += leave.noOfDays;
-        balance.acceptedLeave += leave.noOfDays;
-    }
-
-    // REJECTED
-    if (req.body.status === "Rejected") {
-        balance.rejectedLeave += leave.noOfDays;
-    }
-
-    await balance.save();
-
-    const updatedLeave = await LeaveRequest.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true }
-    );
 
     res.status(200).json({
         success: true,
-        message: "Leave updated",
+        message: `Leave request ${status} successfully`,
         data: updatedLeave
     });
+});
+
+// DELETE LEAVE REQUEST
+exports.deleteLeaveRequest = asyncHandler(async (req, res) => {
+  const leave = await LeaveRequest.findById(req.params.id);
+
+  if (!leave) {
+    res.status(404);
+    throw new Error("Leave request not found");
+  }
+
+  if (leave.status !== "Pending") {
+    res.status(400);
+    throw new Error("Cannot delete leave request that is already processed");
+  }
+
+  await LeaveRequest.findByIdAndDelete(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: "Leave request deleted successfully"
+  });
 });

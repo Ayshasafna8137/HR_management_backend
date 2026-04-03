@@ -2,23 +2,43 @@ const asyncHandler = require("express-async-handler");
 const LeaveType = require("../models/leaveType");
 
 
-// CREATE LEAVE
+// CREATE LEAVE - WITH DUPLICATE CHECK
 exports.createLeaveType = asyncHandler(async (req, res) => {
 
     const {
+        companyId,
         leaveName,
         leaveType,
         leaveUnit,
         status,
         notificationPeriod,
         duration,
-        annualLimit
+        annualLimit,
+        createdBy,
+        note
     } = req.body;
+
+    // Validate companyId
+    if (!companyId) {
+        res.status(400);
+        throw new Error("Company ID is required");
+    }
 
     // required fields
     if (!leaveName || !leaveType || !leaveUnit) {
         res.status(400);
         throw new Error("leaveName, leaveType and leaveUnit are required");
+    }
+
+    // Check for duplicate leave type with same name for the same company
+    const existingLeaveType = await LeaveType.findOne({
+        companyId: companyId,
+        leaveName: { $regex: new RegExp(`^${leaveName}$`, 'i') } // Case-insensitive check
+    });
+
+    if (existingLeaveType) {
+        res.status(400);
+        throw new Error(`Leave type "${leaveName}" already exists for this company`);
     }
 
     // status validation
@@ -39,18 +59,23 @@ exports.createLeaveType = asyncHandler(async (req, res) => {
         throw new Error("Duration cannot be negative");
     }
 
-    // notification period validation
-    if (notificationPeriod !== undefined && notificationPeriod.trim() === "") {
-        res.status(400);
-        throw new Error("Notification period cannot be empty");
-    }
-
     if (annualLimit && annualLimit < 0) {
         res.status(400);
         throw new Error("Annual limit cannot be negative");
     }
 
-    const leave = await LeaveType.create(req.body);
+    const leave = await LeaveType.create({
+        companyId,
+        leaveName,
+        leaveType,
+        leaveUnit,
+        status: status || "Active",
+        notificationPeriod: notificationPeriod || "",
+        duration: duration || 0,
+        annualLimit: annualLimit || 0,
+        createdBy: createdBy || "HR Department",
+        note: note || ""
+    });
 
     res.status(201).json({
         success: true,
@@ -61,10 +86,16 @@ exports.createLeaveType = asyncHandler(async (req, res) => {
 });
 
 
-// GET ALL LEAVES
+// GET ALL LEAVES - Filter by companyId to prevent showing other companies' data
 exports.getLeaveTypes = asyncHandler(async (req, res) => {
-
-    const leaves = await LeaveType.find().populate("companyId");
+    const { companyId } = req.query;
+    
+    const query = {};
+    if (companyId) {
+        query.companyId = companyId;
+    }
+    
+    const leaves = await LeaveType.find(query).populate("companyId").sort({ createdAt: -1 });
 
     res.status(200).json({
         success: true,
@@ -75,11 +106,37 @@ exports.getLeaveTypes = asyncHandler(async (req, res) => {
 });
 
 
-// UPDATE LEAVE
+// UPDATE LEAVE - WITH DUPLICATE CHECK
 exports.updateLeaveType = asyncHandler(async (req, res) => {
 
+    const { id } = req.params;
+    const { leaveName, companyId } = req.body;
+
+    // If leaveName is being updated, check for duplicates
+    if (leaveName) {
+        // Get the current leave type
+        const currentLeave = await LeaveType.findById(id);
+        
+        if (!currentLeave) {
+            res.status(404);
+            throw new Error("Leave type not found");
+        }
+
+        // Check if another leave type with same name exists (excluding current one)
+        const existingLeaveType = await LeaveType.findOne({
+            companyId: companyId || currentLeave.companyId,
+            leaveName: { $regex: new RegExp(`^${leaveName}$`, 'i') },
+            _id: { $ne: id } // Exclude current record
+        });
+
+        if (existingLeaveType) {
+            res.status(400);
+            throw new Error(`Leave type "${leaveName}" already exists for this company`);
+        }
+    }
+
     const leave = await LeaveType.findByIdAndUpdate(
-        req.params.id,
+        id,
         req.body,
         {
             new: true,

@@ -14,8 +14,6 @@ const leaveRequestSchema = new mongoose.Schema({
     required: true
   },
 
-
-
   leaveType: {
     type: String,
     enum: ["Emergency", "Family", "Sick", "Casual"],

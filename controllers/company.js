@@ -2,75 +2,12 @@ const CompanyModel = require("../models/Company");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 
+// CREATE COMPANY
+exports.createCompany = asyncHandler(async (req, res) => {
+  console.log("=== CREATE COMPANY ===");
+  console.log("Request body:", req.body);
 
-// GET companies
-exports.getCompany = asyncHandler(async (req, res) => {
-
-  const companies = await CompanyModel
-    .find({ isDelete: false })
-    .populate("mainBranch")  //population
-    .sort({ createdAt: -1 });
-
-  res.status(200).json(companies);
-
-});
-
-
-// ADD company
-exports.addCompany = asyncHandler(async (req, res) => {
-
-  const { name, email, phone, website, logo, address, industry, mainBranch } = req.body;
-
-  // name validation
-  if (!name || name.trim() === "") {
-    return res.status(400).json({ message: "Company name is required" });
-  }
-
-  // email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email || !emailRegex.test(email)) {
-    return res.status(400).json({ message: "Valid email is required" });
-  }
-
-  // check duplicate email
-  const existingCompany = await CompanyModel.findOne({ email });
-  if (existingCompany) {
-    return res.status(400).json({ message: "Company with this email already exists" });
-  }
-
-  // phone validation
-  const phoneRegex = /^[0-9]{10}$/;
-  if (phone && !phoneRegex.test(phone)) {
-    return res.status(400).json({ message: "Phone must be 10 digits" });
-  }
-
-  // website validation
-  const websiteRegex = /^(https?:\/\/)?([\w\-])+\.{1}([a-zA-Z]{2,63})([\/\w\.-]*)*\/?$/;
-  if (website && !websiteRegex.test(website)) {
-    return res.status(400).json({ message: "Invalid website URL" });
-  }
-
-  // logo validation
-  if (logo && typeof logo !== "string") {
-    return res.status(400).json({ message: "Logo must be a string URL or filename" });
-  }
-
-  // address validation
-  if (address && address.length < 5) {
-    return res.status(400).json({ message: "Address must be at least 5 characters" });
-  }
-
-  // industry validation
-  if (industry && industry.trim().length < 2) {
-    return res.status(400).json({ message: "Industry must be at least 2 characters" });
-  }
-
-  // mainBranch validation
-  if (mainBranch && !mongoose.Types.ObjectId.isValid(mainBranch)) {
-    return res.status(400).json({ message: "Invalid mainBranch ID" });
-  }
-
-  const company = new CompanyModel({
+  const {
     name,
     email,
     phone,
@@ -79,66 +16,197 @@ exports.addCompany = asyncHandler(async (req, res) => {
     address,
     industry,
     mainBranch
+  } = req.body;
+
+  // Validate required fields
+  if (!name) {
+    return res.status(400).json({
+      success: false,
+      message: "Company name is required"
+    });
+  }
+
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: "Company email is required"
+    });
+  }
+
+  // Check if company already exists
+  const existingCompany = await CompanyModel.findOne({ 
+    email: email.toLowerCase(),
+    isDelete: false 
   });
-
-  const savedCompany = await company.save();
-
-  res.status(201).json(savedCompany);
-
-});
-
-
-// UPDATE company
-exports.updateCompany = asyncHandler(async (req, res) => {
-
-  const { id } = req.params;
-
-  // id validation
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid company ID" });
+  
+  if (existingCompany) {
+    return res.status(400).json({
+      success: false,
+      message: "Company with this email already exists"
+    });
   }
 
-  const company = await CompanyModel.findByIdAndUpdate(
-    id,
-    req.body,
-    { new: true, runValidators: true }
-  );
-
-  if (!company) {
-    return res.status(404).json({ message: "Company not found" });
-  }
-
-  res.status(200).json(company);
-
-});
-
-
-// DELETE company (Soft Delete)
-exports.deleteCompany = asyncHandler(async (req, res) => {
-
-  const { id } = req.params;
-
-  // id validation
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid company ID" });
-  }
-
-  const company = await CompanyModel.findByIdAndUpdate(
-    id,
-    {
-      isDelete: true,
-      isActive: false
+  // Create company data
+  const companyData = {
+    name: name.trim(),
+    email: email.toLowerCase().trim(),
+    phone: phone || "",
+    website: website || "",
+    logo: logo || "",
+    address: address || {
+      street: "",
+      city: "",
+      state: "",
+      country: "",
+      zipCode: ""
     },
-    { new: true }
-  );
+    industry: industry || "",
+    mainBranch: mainBranch || null,
+    isActive: true,
+    isDelete: false
+  };
 
-  if (!company) {
-    return res.status(404).json({ message: "Company not found" });
+  try {
+    const company = new CompanyModel(companyData);
+    const savedCompany = await company.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Company created successfully",
+      data: savedCompany
+    });
+  } catch (error) {
+    console.error("Error creating company:", error);
+    
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(", ")
+      });
+    }
+    
+    throw error;
+  }
+});
+
+// GET ALL COMPANIES
+exports.getCompanies = asyncHandler(async (req, res) => {
+  const companies = await CompanyModel.find({ isDelete: false, isActive: true })
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: companies.length,
+    data: companies
+  });
+});
+
+// GET COMPANY BY ID
+exports.getCompanyById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid company ID format"
+    });
+  }
+
+  const company = await CompanyModel.findById(id);
+
+  if (!company || company.isDelete) {
+    return res.status(404).json({
+      success: false,
+      message: "Company not found"
+    });
   }
 
   res.status(200).json({
-    message: "Company deleted successfully ",
+    success: true,
     data: company
   });
+});
 
+// UPDATE COMPANY
+exports.updateCompany = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid company ID format"
+    });
+  }
+
+  const company = await CompanyModel.findById(id);
+
+  if (!company || company.isDelete) {
+    return res.status(404).json({
+      success: false,
+      message: "Company not found"
+    });
+  }
+
+  const updateData = { ...req.body };
+  delete updateData.companyId; // Remove if exists
+
+  // If updating email, check uniqueness
+  if (updateData.email && updateData.email !== company.email) {
+    const emailExists = await CompanyModel.findOne({
+      email: updateData.email.toLowerCase(),
+      _id: { $ne: id },
+      isDelete: false
+    });
+    
+    if (emailExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists"
+      });
+    }
+    updateData.email = updateData.email.toLowerCase();
+  }
+
+  const updatedCompany = await CompanyModel.findByIdAndUpdate(
+    id,
+    updateData,
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Company updated successfully",
+    data: updatedCompany
+  });
+});
+
+// DELETE COMPANY
+exports.deleteCompany = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid company ID format"
+    });
+  }
+
+  const company = await CompanyModel.findById(id);
+
+  if (!company) {
+    return res.status(404).json({
+      success: false,
+      message: "Company not found"
+    });
+  }
+
+  company.isDelete = true;
+  company.isActive = false;
+  await company.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Company deleted successfully"
+  });
 });

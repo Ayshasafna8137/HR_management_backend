@@ -1,31 +1,32 @@
 const mongoose = require("mongoose");
 
-const attendanceSchema = new mongoose.Schema({
-
+const attendanceSchema = new mongoose.Schema(
+{
   companyId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Company",
     required: true
   },
 
-    userId: {
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true
   },
 
-
-
   firstIn: {
-    type: String
+    type: String,
+    required: true
   },
 
   lastOut: {
-    type: String
+    type: String,
+    default: null
   },
 
   totalHours: {
-    type: String
+    type: String,
+    default: null
   },
 
   status: {
@@ -34,31 +35,13 @@ const attendanceSchema = new mongoose.Schema({
     default: "Present"
   },
 
-  punch: {
-    type: Boolean,
-    default: false
-  },
-
-  todayActivity: [
-    {
-      time: {
-        type: String,
-        required: true
-      },
-      punch: {
-        type: String,
-        enum: ["Punched In", "Punched Out"],
-        required: true
-      }
-    }
-  ],
-
   shift: {
     type: String,
-    enum: ["General", "Day Shift", "Night Shift"],
     default: "General"
   }
 
-}, { timestamps: true });
+},
+{ timestamps: true }
+);
 
 module.exports = mongoose.model("Attendance", attendanceSchema);

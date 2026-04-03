@@ -35,7 +35,7 @@ var app = express();
 
 // CORS configuration
 app.use(cors({
-  origin: [ "http://localhost:3000", "http://localhost:3001",],
+  origin:"http://localhost:5173",
   methods: ["PUT", "DELETE", "POST", "GET", "PATCH"],
   credentials: true
 }));
@@ -56,7 +56,7 @@ app.use('/', indexRouter);
 //users
 app.use('/api/users', userRouter);
 //userprofile
-app.use('/api/users',userProfileRouter)
+app.use('/api/usersprofile',userProfileRouter)
 // attendance
 app.use('/api/attendance',attendanceRouter);
 //company
